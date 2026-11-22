@@ -3,11 +3,11 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 apply plugin: 'com.android.application'
 
 android {
-    compileSdk 37
+    compileSdk 36
     defaultConfig {
         applicationId "com.dozingcatsoftware.vectorcamera"
         minSdk 23
-        targetSdk 37
+        targetSdk 36
         versionCode 16
         versionName "2.1.0"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
