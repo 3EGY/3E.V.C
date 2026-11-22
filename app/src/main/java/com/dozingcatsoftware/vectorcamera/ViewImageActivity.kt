@@ -37,8 +37,6 @@ class ViewImageActivity : AppCompatActivity() {
     private lateinit var imageId: String
     private var inEffectSelectionMode = false
     private var thumbnailRenderer: StaticThumbnailRenderer? = null
-    // The image's pixels, held while a custom effect editor is open so that each change
-    // doesn't reread them from disk.
     private var cameraImageForEditing: CameraImage? = null
     private val effectRegistry = EffectRegistry()
     private val preferences = VCPreferences(this)
@@ -73,7 +71,6 @@ class ViewImageActivity : AppCompatActivity() {
             thumbnailRenderer?.requestThumbnail(info.id)
         }
 
-        // Back closes the effect picker or an open editor panel rather than leaving the activity.
         onBackPressedCallback = object: OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
                 if (inEffectSelectionMode) {
@@ -103,7 +100,6 @@ class ViewImageActivity : AppCompatActivity() {
         updateEditButton()
     }
 
-    // The image's effect as an editable custom effect, or null if it isn't one.
     private fun customEffectForImage(metadata: MediaMetadata): Effect? =
             effectRegistry.customEffectForMetadata(
                     metadata.effectId, metadata.effectMetadata, preferences.lookupFunction)
@@ -120,15 +116,12 @@ class ViewImageActivity : AppCompatActivity() {
                 inEffectSelectionMode || visibleCustomEffectEditor() != null
     }
 
-    // The edit button shows when the image uses a custom effect and its editor is closed.
     private fun updateEditButton() {
         val editable = customEffectForImage(photoLibrary.metadataForItemId(imageId)) != null
         binding.editEffectButton.visibility =
                 if (editable && visibleCustomEffectEditor() == null) View.VISIBLE else View.GONE
     }
 
-    // Opens the editor panel for `effect` if it's a custom effect; otherwise closes any panel.
-    // Edits change this image's saved effect parameters, not the custom effect's preferences.
     private fun showCustomEffectEditor(effect: Effect) {
         hideCustomEffectEditor()
         val editor: View? = when (val scheme = (effect as? CustomEffect<*>)?.scheme) {
@@ -146,7 +139,6 @@ class ViewImageActivity : AppCompatActivity() {
         updateEditButton()
     }
 
-    // Opens the editor for the image's custom effect, from the edit button.
     private fun showCustomEffectEditor(view: View?) {
         val effect = customEffectForImage(photoLibrary.metadataForItemId(imageId)) ?: return
         showCustomEffectEditor(effect)
@@ -181,8 +173,6 @@ class ViewImageActivity : AppCompatActivity() {
         applyEditedEffect {id -> customContourEffect(cs, id)}
     }
 
-    // Re-renders the image with the edited effect and saves it to the image's metadata and
-    // thumbnail, keeping the picker ID so the picker still highlights the custom effect.
     private fun applyEditedEffect(effectForId: (String) -> Effect) {
         val metadata = photoLibrary.metadataForItemId(imageId)
         val effectId = metadata.effectId ?: return
@@ -204,7 +194,6 @@ class ViewImageActivity : AppCompatActivity() {
                 {picker.thumbnailSize},
                 {id, bitmap ->
                     handler.post {
-                        // Ignore thumbnails that arrive after the picker was closed.
                         if (renderer === thumbnailRenderer) {
                             picker.setThumbnail(id, bitmap)
                         }
@@ -264,7 +253,6 @@ class ViewImageActivity : AppCompatActivity() {
 
     private fun handleEffectSelected(info: EffectInfo) {
         val effect = effectRegistry.createEffect(info.id, preferences.lookupFunction)
-        // Update metadata and thumbnail, *not* the full size image because that's slow.
         val newMetadata = photoLibrary.metadataForItemId(imageId)
                 .withEffectMetadata(effect.effectMetadata(), info.id)
         val pb = createProcessedBitmap(effect, newMetadata)
@@ -273,7 +261,6 @@ class ViewImageActivity : AppCompatActivity() {
         binding.overlayView.updateBitmap(pb)
         updateInEffectSelectionModeFlag(false)
         hideEffectPicker()
-        // A newly chosen custom effect opens its editor, as in the camera activity.
         showCustomEffectEditor(effect)
     }
 

@@ -5,7 +5,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
@@ -61,7 +60,6 @@ class VectorPreviewDialog(
             )
         }
 
-        // 1. شريط علوي للإحصائيات والإغلاق
         val topBar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(Color.parseColor("#1C2026"))
@@ -70,7 +68,7 @@ class VectorPreviewDialog(
         }
 
         statsText = TextView(context).apply {
-            text = "جاري تحليل الخطوط..."
+            text = "\u062C\u0627\u0631\u064A \u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u062E\u0637\u0648\u0637..."
             setTextColor(Color.parseColor("#00E5FF"))
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
@@ -78,7 +76,7 @@ class VectorPreviewDialog(
         }
 
         val closeBtn = Button(context).apply {
-            text = "✕ إغلاق"
+            text = "\u2715 \u0625\u063A\u0644\u0627\u0642"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#2C323B"))
             setPadding(24, 8, 24, 8)
@@ -88,7 +86,6 @@ class VectorPreviewDialog(
         topBar.addView(closeBtn)
         root.addView(topBar)
 
-        // 2. منطقة المعاينة الفورية (Zoom & Pan)
         canvasView = VectorCanvasView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -98,7 +95,6 @@ class VectorPreviewDialog(
         }
         root.addView(canvasView)
 
-        // 3. لوحة التحكم الهندسية (قابلة للتمرير)
         val controlsScroll = ScrollView(context).apply {
             setBackgroundColor(Color.parseColor("#1A1E24"))
             layoutParams = LinearLayout.LayoutParams(
@@ -112,14 +108,13 @@ class VectorPreviewDialog(
             setPadding(28, 16, 28, 16)
         }
 
-        // صف خيارات العرض والطبقات الذكية
         val togglesRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
         val smartLayersCheck = CheckBox(context).apply {
-            text = "طبقات ذكية (حوائط/أبواب/تفاصيل)"
+            text = "\u0637\u0628\u0642\u0627\u062A \u0630\u0643\u064A\u0629 (\u062D\u0648\u0627\u0626\u0637/\u0623\u0628\u0648\u0627\u0628/\u062A\u0641\u0627\u0635\u064A\u0644)"
             isChecked = settings.smartLayers
             setTextColor(Color.WHITE)
             textSize = 13f
@@ -131,7 +126,7 @@ class VectorPreviewDialog(
         }
 
         val overlayBgCheck = CheckBox(context).apply {
-            text = "إظهار الصورة"
+            text = "\u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0635\u0648\u0631\u0629"
             isChecked = true
             setTextColor(Color.LTGRAY)
             textSize = 13f
@@ -144,14 +139,13 @@ class VectorPreviewDialog(
         togglesRow.addView(overlayBgCheck)
         controlsBox.addView(togglesRow)
 
-        // صف تقريب الزوايا (رقم الزاوية + سلايدر التسامح)
         val angleRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 10, 0, 6)
         }
         val angleTitle = TextView(context).apply {
-            text = "تقريب لأقرب زاوية (°): "
+            text = "\u062A\u0642\u0631\u064A\u0628 \u0644\u0623\u0642\u0631\u0628 \u0632\u0627\u0648\u064A\u0629 (\u00B0): "
             setTextColor(Color.WHITE)
             textSize = 13f
         }
@@ -179,10 +173,9 @@ class VectorPreviewDialog(
         angleRow.addView(angleInput)
         controlsBox.addView(angleRow)
 
-        // سلايدر 1: مدى تقريب الزاوية (Ortho Tolerance)
         controlsBox.addView(createSliderRow(
-            label = "قوة تعديل الزوايا (Tolerance)",
-            unit = "°",
+            label = "\u0642\u0648\u0629 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0632\u0648\u0627\u064A\u0627 (Tolerance)",
+            unit = "\u00B0",
             max = 30,
             initial = settings.snapToleranceDeg.toInt()
         ) { progress ->
@@ -190,9 +183,8 @@ class VectorPreviewDialog(
             triggerRecompute()
         })
 
-        // سلايدر 2: إزالة الشوائب (Min Noise Length)
         controlsBox.addView(createSliderRow(
-            label = "إزالة الشوائب الأصغر من",
+            label = "\u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0634\u0648\u0627\u0626\u0628 \u0627\u0644\u0623\u0635\u063A\u0631 \u0645\u0646",
             unit = " px",
             max = 120,
             initial = settings.minNoiseLengthPx.toInt()
@@ -201,9 +193,8 @@ class VectorPreviewDialog(
             triggerRecompute()
         })
 
-        // سلايدر 3: تبسيط الخطوط واستقامتها
         controlsBox.addView(createSliderRow(
-            label = "تبسيط النقاط وتنعيم الخطوط",
+            label = "\u062A\u0628\u0633\u064A\u0637 \u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u062A\u0646\u0639\u064A\u0645 \u0627\u0644\u062E\u0637\u0648\u0637",
             unit = "",
             max = 100,
             initial = (settings.simplifyTolerance * 10).toInt()
@@ -213,9 +204,8 @@ class VectorPreviewDialog(
             triggerRecompute()
         })
 
-        // سلايدر 4: حساسية التقاط الحواف
         controlsBox.addView(createSliderRow(
-            label = "حساسية الحواف والتفاصيل",
+            label = "\u062D\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u062D\u0648\u0627\u0641 \u0648\u0627\u0644\u062A\u0641\u0627\u0635\u064A\u0644",
             unit = "",
             max = 220,
             initial = settings.edgeThreshold
@@ -227,7 +217,6 @@ class VectorPreviewDialog(
         controlsScroll.addView(controlsBox)
         root.addView(controlsScroll)
 
-        // 4. شريط أزرار المشاركة النهائي (DXF / SVG)
         val bottomBar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(Color.parseColor("#121417"))
@@ -235,7 +224,7 @@ class VectorPreviewDialog(
         }
 
         val exportDxfBtn = Button(context).apply {
-            text = "مشاركة ملف CAD (.DXF)"
+            text = "\u0645\u0634\u0627\u0631\u0643\u0629 \u0645\u0644\u0641 CAD (.DXF)"
             setTextColor(Color.BLACK)
             typeface = Typeface.DEFAULT_BOLD
             setBackgroundColor(Color.parseColor("#00E5FF"))
@@ -251,7 +240,7 @@ class VectorPreviewDialog(
         }
 
         val exportSvgBtn = Button(context).apply {
-            text = "مشاركة (.SVG)"
+            text = "\u0645\u0634\u0627\u0631\u0643\u0629 (.SVG)"
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             setBackgroundColor(Color.parseColor("#2E7D32"))
@@ -317,9 +306,9 @@ class VectorPreviewDialog(
                     val wallsCount = scene.polylines.count { it.layer == CadLayer.WALLS }
                     val openCount = scene.polylines.count { it.layer == CadLayer.OPENINGS }
                     statsText.text = if (snapshotSettings.smartLayers) {
-                        "الخطوط: ${scene.polylines.size} | حوائط: $wallsCount | فتحات: $openCount"
+                        "\u0627\u0644\u062E\u0637\u0648\u0637: ${scene.polylines.size} | \u062D\u0648\u0627\u0626\u0637: $wallsCount | \u0641\u062A\u062D\u0627\u062A: $openCount"
                     } else {
-                        "الخطوط: ${scene.polylines.size} | النقاط: ${scene.totalVertices}"
+                        "\u0627\u0644\u062E\u0637\u0648\u0637: ${scene.polylines.size} | \u0627\u0644\u0646\u0642\u0627\u0637: ${scene.totalVertices}"
                     }
                 }
             }
@@ -334,9 +323,6 @@ class VectorPreviewDialog(
         }
     }
 
-    /**
-     * لوحة رسم تفاعلية تدعم التكبير والتحريك باللمس لعرض خطوط الـ CAD بدقة
-     */
     private inner class VectorCanvasView(context: Context) : View(context) {
         var scene: VectorScene? = null
         var showSourceImage: Boolean = true
@@ -392,7 +378,6 @@ class VectorPreviewDialog(
             super.onDraw(canvas)
             canvas.drawColor(Color.parseColor("#0D1014"))
 
-            // رسم شبكة CAD خفيفة في الخلفية
             val gridStep = 60f
             var gx = 0f
             while (gx < width) {

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Vector Camera</string>
+    <string name="app_name">3E.V.CAD</string>
     <string name="noImagesFound">No pictures found.</string>
 
     <string name="takePictureWithVolumeButtonPrefsKey">takePictureWithVolumeButton</string>
@@ -20,7 +20,7 @@
 
     <string name="blackOnWhitePixelCharsPrefId">pixelChars.BLACK_ON_WHITE</string>
     <string name="blackOnWhitePixelCharsPrefTitle">Black on white characters</string>
-    <string name="blackOnWhitePixelCharsPrefMessage">Enter characters to use for black on white images from darkest to brightest, or leave blank for the default of #o:..</string>
+    <string name="blackOnWhitePixelCharsPrefMessage">Enter characters to use in images from darkest to brightest, or leave blank for the default of #o:..</string>
 
     <string name="ansiColorPixelCharsPrefId">pixelChars.ANSI_COLOR</string>
     <string name="ansiColorPixelCharsPrefTitle">Primary color characters</string>
@@ -40,7 +40,7 @@
     <string name="shareDialogNoLabel">Cancel</string>
     <string name="shareActionTitle">Share using</string>
 
-	<string name="sharePictureDialogTitle">Share picture as</string>
+    <string name="sharePictureDialogTitle">Share picture as</string>
     <string name="sharePictureImageOptionLabel">Image (PNG)</string>
     <string name="sharePictureDxfOptionLabel">CAD Vector Studio (DXF / SVG)</string>
     <string name="sharePictureHtmlOptionLabel">HTML</string>

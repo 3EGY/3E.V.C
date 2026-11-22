@@ -15,19 +15,19 @@ import kotlin.math.round
 import kotlin.math.sin
 
 data class VectorExportSettings(
-    val simplifyTolerance: Float = 1.8f,   // تبسيط الخطوط (Douglas-Peucker)
-    val minNoiseLengthPx: Float = 12f,     // إزالة الشوائب الأصغر من هذا الطول بالبكسل
-    val edgeThreshold: Int = 150,          // حساسية اكتشاف الحواف (40 - 255)
-    val snapBaseAngle: Float = 90f,        // زاوية الأساس للتقريب (مثلاً 90 أو 45)
-    val snapToleranceDeg: Float = 8f,      // مجال التسامح بالدرجات لتقريب الزاوية (0 = معطل)
-    val smartLayers: Boolean = true        // تقسيم تلقائي لطبقات الحوائط والأبواب والتفاصيل
+    val simplifyTolerance: Float = 1.8f,
+    val minNoiseLengthPx: Float = 12f,
+    val edgeThreshold: Int = 150,
+    val snapBaseAngle: Float = 90f,
+    val snapToleranceDeg: Float = 8f,
+    val smartLayers: Boolean = true
 )
 
 enum class CadLayer(val dxfName: String, val aciColor: Int, val previewColor: Int) {
-    WALLS("3E_WALLS", 7, Color.parseColor("#FFFFFF")),          // أبيض - حوائط وحدود رئيسية
-    OPENINGS("3E_OPENINGS", 4, Color.parseColor("#00E5FF")),    // سماوي - أبواب ونوافذ
-    DETAILS("3E_DETAILS", 3, Color.parseColor("#76FF03")),      // أخضر - تفاصيل وعناصر
-    SINGLE("3E_VECTOR", 7, Color.parseColor("#00E5FF"))         // طبقة موحدة
+    WALLS("3E_WALLS", 7, Color.parseColor("#FFFFFF")),
+    OPENINGS("3E_OPENINGS", 4, Color.parseColor("#00E5FF")),
+    DETAILS("3E_DETAILS", 3, Color.parseColor("#76FF03")),
+    SINGLE("3E_VECTOR", 7, Color.parseColor("#00E5FF"))
 }
 
 data class VectorPolyline(
@@ -48,9 +48,6 @@ object VectorExporter {
 
     data class Point2D(val x: Float, val y: Float)
 
-    /**
-     * يستخرج المشهد المتجهي وفق الإعدادات الحية للمعاينة أو التصدير
-     */
     fun traceScene(src: Bitmap, settings: VectorExportSettings): VectorScene {
         val maxDim = 1280
         val scale = if (max(src.width, src.height) > maxDim) {
@@ -147,16 +144,13 @@ object VectorExporter {
 
                 if (chain.size < 3) continue
 
-                // 1. تبسيط الخطوط
                 var pts = ramerDouglasPeucker(chain, settings.simplifyTolerance * invScale)
                 if (pts.size < 2) continue
 
-                // 2. تقريب الزوايا لأقرب مضاعف لزاوية الأساس (Ortho / Angle Snap)
                 if (settings.snapToleranceDeg > 0.1f && settings.snapBaseAngle > 1f) {
                     pts = snapAngles(pts, settings.snapBaseAngle, settings.snapToleranceDeg)
                 }
 
-                // 3. حساب الطول الكلي واستبعاد الشوائب
                 val totalLen = polylineLength(pts)
                 if (totalLen < settings.minNoiseLengthPx) continue
 
@@ -172,9 +166,6 @@ object VectorExporter {
         return VectorScene(polylines, src.width, src.height)
     }
 
-    /**
-     * تقريب اتجاه كل قطعة مستقيمة لأقرب مضاعف للزاوية المحددة (مثلاً 90 درجة)
-     */
     private fun snapAngles(points: List<Point2D>, baseAngleDeg: Float, toleranceDeg: Float): List<Point2D> {
         if (points.size < 2) return points
         val out = ArrayList<Point2D>(points.size)
@@ -197,7 +188,6 @@ object VectorExporter {
                 val ny = prevNew.y + (segLen * sin(rad)).toFloat()
                 out.add(Point2D(nx, ny))
             } else {
-                // الحفاظ على الإزاحة النسبية للخطوط المائلة خارج نطاق التقريب
                 val dx = currOrig.x - prevOrig.x
                 val dy = currOrig.y - prevOrig.y
                 out.add(Point2D(prevNew.x + dx, prevNew.y + dy))
@@ -206,9 +196,6 @@ object VectorExporter {
         return out
     }
 
-    /**
-     * تصنيف الخط هندسياً إلى طبقات الحوائط أو الفتحات (أبواب/نوافذ) أو التفاصيل
-     */
     private fun classifyLayer(
         pts: List<Point2D>,
         length: Float,
@@ -218,17 +205,14 @@ object VectorExporter {
     ): CadLayer {
         if (!smartLayers) return CadLayer.SINGLE
 
-        // فحص هل الخط مستطيل/فتحة مغلقة متوسطة الحجم (أبواب / شبابيك)
         if (isClosed && pts.size in 4..7 && length in (diagRef * 0.04f)..(diagRef * 0.35f)) {
             return CadLayer.OPENINGS
         }
 
-        // الخطوط الطويلة الممتدة تمثل الحوائط والحدود المعمارية الرئيسية
         if (length >= diagRef * 0.14f) {
             return CadLayer.WALLS
         }
 
-        // الفتحات المفتوحة المتعامدة المتوسطة
         if (pts.size in 3..5 && length >= diagRef * 0.06f) {
             return CadLayer.OPENINGS
         }
@@ -253,7 +237,6 @@ object VectorExporter {
             writer.write("9\n\$EXTMAX\n10\n${scene.width.toFloat()}\n20\n${scene.height.toFloat()}\n30\n0.0\n")
             writer.write("0\nENDSEC\n")
 
-            // تعريف الطبقات الذكية وألوانها في جدول الطبقات
             val usedLayers = scene.polylines.map { it.layer }.distinct().ifEmpty { listOf(CadLayer.SINGLE) }
             writer.write("0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n${usedLayers.size}\n")
             for (layer in usedLayers) {
@@ -261,7 +244,6 @@ object VectorExporter {
             }
             writer.write("0\nENDTAB\n0\nENDSEC\n")
 
-            // كتابة الكيانات كلٌ في طبقته
             writer.write("0\nSECTION\n2\nENTITIES\n")
             for (poly in scene.polylines) {
                 if (poly.points.size < 2) continue
