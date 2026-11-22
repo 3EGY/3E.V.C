@@ -38,8 +38,6 @@ class ViewImageActivity : AppCompatActivity() {
     private lateinit var imageId: String
     private var inEffectSelectionMode = false
     private var thumbnailRenderer: StaticThumbnailRenderer? = null
-    // The image's pixels, held while a custom effect editor is open so that each change
-    // doesn't reread them from disk.
     private var cameraImageForEditing: CameraImage? = null
     private val effectRegistry = EffectRegistry()
     private val preferences = VCPreferences(this)
@@ -74,7 +72,6 @@ class ViewImageActivity : AppCompatActivity() {
             thumbnailRenderer?.requestThumbnail(info.id)
         }
 
-        // Back closes the effect picker or an open editor panel rather than leaving the activity.
         onBackPressedCallback = object: OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
                 if (inEffectSelectionMode) {
@@ -104,7 +101,6 @@ class ViewImageActivity : AppCompatActivity() {
         updateEditButton()
     }
 
-    // The image's effect as an editable custom effect, or null if it isn't one.
     private fun customEffectForImage(metadata: MediaMetadata): Effect? =
             effectRegistry.customEffectForMetadata(
                     metadata.effectId, metadata.effectMetadata, preferences.lookupFunction)
@@ -121,15 +117,12 @@ class ViewImageActivity : AppCompatActivity() {
                 inEffectSelectionMode || visibleCustomEffectEditor() != null
     }
 
-    // The edit button shows when the image uses a custom effect and its editor is closed.
     private fun updateEditButton() {
         val editable = customEffectForImage(photoLibrary.metadataForItemId(imageId)) != null
         binding.editEffectButton.visibility =
                 if (editable && visibleCustomEffectEditor() == null) View.VISIBLE else View.GONE
     }
 
-    // Opens the editor panel for `effect` if it's a custom effect; otherwise closes any panel.
-    // Edits change this image's saved effect parameters, not the custom effect's preferences.
     private fun showCustomEffectEditor(effect: Effect) {
         hideCustomEffectEditor()
         val editor: View? = when (val scheme = (effect as? CustomEffect<*>)?.scheme) {
@@ -147,7 +140,6 @@ class ViewImageActivity : AppCompatActivity() {
         updateEditButton()
     }
 
-    // Opens the editor for the image's custom effect, from the edit button.
     private fun showCustomEffectEditor(view: View?) {
         val effect = customEffectForImage(photoLibrary.metadataForItemId(imageId)) ?: return
         showCustomEffectEditor(effect)
@@ -182,8 +174,6 @@ class ViewImageActivity : AppCompatActivity() {
         applyEditedEffect {id -> customContourEffect(cs, id)}
     }
 
-    // Re-renders the image with the edited effect and saves it to the image's metadata and
-    // thumbnail, keeping the picker ID so the picker still highlights the custom effect.
     private fun applyEditedEffect(effectForId: (String) -> Effect) {
         val metadata = photoLibrary.metadataForItemId(imageId)
         val effectId = metadata.effectId ?: return
@@ -205,7 +195,6 @@ class ViewImageActivity : AppCompatActivity() {
                 {picker.thumbnailSize},
                 {id, bitmap ->
                     handler.post {
-                        // Ignore thumbnails that arrive after the picker was closed.
                         if (renderer === thumbnailRenderer) {
                             picker.setThumbnail(id, bitmap)
                         }
@@ -265,7 +254,6 @@ class ViewImageActivity : AppCompatActivity() {
 
     private fun handleEffectSelected(info: EffectInfo) {
         val effect = effectRegistry.createEffect(info.id, preferences.lookupFunction)
-        // Update metadata and thumbnail, *not* the full size image because that's slow.
         val newMetadata = photoLibrary.metadataForItemId(imageId)
                 .withEffectMetadata(effect.effectMetadata(), info.id)
         val pb = createProcessedBitmap(effect, newMetadata)
@@ -274,29 +262,23 @@ class ViewImageActivity : AppCompatActivity() {
         binding.overlayView.updateBitmap(pb)
         updateInEffectSelectionModeFlag(false)
         hideEffectPicker()
-        // A newly chosen custom effect opens its editor, as in the camera activity.
         showCustomEffectEditor(effect)
     }
 
     private fun shareImage(view: View) {
-        // Stop reading metadata so often?
         val metadata = photoLibrary.metadataForItemId(imageId)
         val effect = effectRegistry.effectForMetadata(metadata.effectMetadata)
-        if (effect is AsciiEffect) {
-            showAsciiTypeShareDialog(metadata, effect)
-        }
-        else {
-            shareImage(metadata, effect)
-        }
+        showFormatShareDialog(metadata, effect)
     }
 
     private fun shareFile(path: String, mimeType: String) {
+        val file = File(path)
         val fileUri = FileProvider.getUriForFile(this,
-                BuildConfig.APPLICATION_ID + ".fileprovider", File(path))
+                BuildConfig.APPLICATION_ID + ".fileprovider", file)
         val shareIntent = Intent(Intent.ACTION_SEND)
         shareIntent.type = mimeType
         shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri)
-        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "${Constants.APP_NAME} $imageId.png")
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, file.name)
         shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
         val chooser = Intent.createChooser(shareIntent, getString(R.string.shareActionTitle))
@@ -305,14 +287,8 @@ class ViewImageActivity : AppCompatActivity() {
     }
 
     private fun shareImage(metadata: MediaMetadata, effect: Effect) {
-        // This is moderately complicated. If the effect of the exported PNG file doesn't match the
-        // current effect, we need to export again. Except that we could have just taken a picture
-        // and the export could be in progress. There's no good way to detect that, so we check if
-        // the metadata timestamp is later than 10 seconds ago and if so give it a chance to finish.
-        // While the export is in progress we show a progress spinner, which isn't ideal but at
-        // least lets the user know there's something happening.
         var waitDialog: ProgressDialog? = null
-        var pngFile = photoLibrary.imageFileForItemId(imageId)
+        val pngFile = photoLibrary.imageFileForItemId(imageId)
         var firstCheckTimestamp: Long? = null
 
         fun doShare() {
@@ -338,10 +314,8 @@ class ViewImageActivity : AppCompatActivity() {
                 try {
                     val pb = createProcessedBitmap(effect, metadata)
                     photoLibrary.writePngImage(this, pb, imageId)
-                    // Update metadata so we won't need to regenerate the image if we export again
-                    // with the same effect.
-                    val metadata = photoLibrary.metadataForItemId(imageId)
-                    val newMetadata = metadata.withExportedEffectMetadata(
+                    val currentMetadata = photoLibrary.metadataForItemId(imageId)
+                    val newMetadata = currentMetadata.withExportedEffectMetadata(
                         effect.effectMetadata(), "png")
                     photoLibrary.writeMetadata(newMetadata, imageId)
                     handler.post { doShare() }
@@ -369,26 +343,57 @@ class ViewImageActivity : AppCompatActivity() {
                 }
             }
             else {
-                // No file at all, we could be waiting for the initial export.
                 val now = System.currentTimeMillis()
                 if (firstCheckTimestamp == null) {
                     firstCheckTimestamp = now
                 }
                 if ((now - metadata.timestamp < 10000) && (now - firstCheckTimestamp!! < 10000)) {
-                    // Give the initial export a chance to finish.
-                    // firstCheckTimestamp avoids waiting indefinitely if the timestamp is bogus.
                     Log.i(TAG, "Waiting for initial export")
                     showWaitDialog()
                     handler.postDelayed({shareIfExists()}, 1000L)
                 }
                 else {
                     Log.i(TAG, "Giving up on initial export")
-                    // Probably not waiting on initial export, do it ourselves.
                     exportAndShare()
                 }
             }
         }
         shareIfExists()
+    }
+
+    private fun shareVector(metadata: MediaMetadata, effect: Effect, isDxf: Boolean) {
+        val waitDialog = ProgressDialog(this).apply {
+            isIndeterminate = true
+            setMessage(if (isDxf) "Generating DXF CAD file..." else "Generating SVG vector file...")
+            setCancelable(false)
+            show()
+        }
+
+        Thread {
+            try {
+                val ext = if (isDxf) "dxf" else "svg"
+                val mimeType = if (isDxf) "application/dxf" else "image/svg+xml"
+                val outFile = photoLibrary.tempFileWithName("${imageId}_3E.$ext")
+                val pb = createProcessedBitmap(effect, metadata)
+                photoLibrary.createTempFileOutputStream(outFile).use { os ->
+                    if (isDxf) {
+                        VectorExporter.writeDxf(pb, os)
+                    } else {
+                        VectorExporter.writeSvg(pb, os)
+                    }
+                }
+                handler.post {
+                    waitDialog.dismiss()
+                    shareFile(outFile.path, mimeType)
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "Error exporting vector", ex)
+                handler.post {
+                    waitDialog.dismiss()
+                    Toast.makeText(this, "Error exporting vector: ${ex.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     private fun shareText(metadata: MediaMetadata, effect: AsciiEffect) {
@@ -409,27 +414,37 @@ class ViewImageActivity : AppCompatActivity() {
         shareFile(htmlFile.path, "text/html")
     }
 
-    private fun showAsciiTypeShareDialog(metadata: MediaMetadata, effect: AsciiEffect) {
-        val shareTypes = arrayOf("image", "html", "text")
-        var selectedShareType = "image"
-        val shareTypeLabels = arrayOf(
-                getString(R.string.sharePictureImageOptionLabel),
-                getString(R.string.sharePictureHtmlOptionLabel),
-                getString(R.string.sharePictureTextOptionLabel))
+    private fun showFormatShareDialog(metadata: MediaMetadata, effect: Effect) {
+        val shareTypes = mutableListOf("image", "dxf", "svg")
+        val shareTypeLabels = mutableListOf(
+            getString(R.string.sharePictureImageOptionLabel),
+            getString(R.string.sharePictureDxfOptionLabel),
+            getString(R.string.sharePictureSvgOptionLabel)
+        )
+        if (effect is AsciiEffect) {
+            shareTypes.add("html")
+            shareTypes.add("text")
+            shareTypeLabels.add(getString(R.string.sharePictureHtmlOptionLabel))
+            shareTypeLabels.add(getString(R.string.sharePictureTextOptionLabel))
+        }
+
+        var selectedShareType = shareTypes[0]
         AlertDialog.Builder(this)
-                .setTitle(R.string.sharePictureDialogTitle)
-                .setSingleChoiceItems(shareTypeLabels, 0, {
-                    _: DialogInterface, which: Int -> selectedShareType = shareTypes[which]
-                })
-                .setPositiveButton(R.string.shareDialogYesLabel, {_: DialogInterface, _: Int ->
-                    when (selectedShareType) {
-                        "image" -> shareImage(metadata, effect)
-                        "html" -> shareHtml(metadata, effect)
-                        "text" -> shareText(metadata, effect)
-                    }
-                })
-                .setNegativeButton(R.string.shareDialogNoLabel, null)
-                .show()
+            .setTitle(R.string.sharePictureDialogTitle)
+            .setSingleChoiceItems(shareTypeLabels.toTypedArray(), 0) { _: DialogInterface, which: Int ->
+                selectedShareType = shareTypes[which]
+            }
+            .setPositiveButton(R.string.shareDialogYesLabel) { _: DialogInterface, _: Int ->
+                when (selectedShareType) {
+                    "image" -> shareImage(metadata, effect)
+                    "dxf" -> shareVector(metadata, effect, isDxf = true)
+                    "svg" -> shareVector(metadata, effect, isDxf = false)
+                    "html" -> if (effect is AsciiEffect) shareHtml(metadata, effect)
+                    "text" -> if (effect is AsciiEffect) shareText(metadata, effect)
+                }
+            }
+            .setNegativeButton(R.string.shareDialogNoLabel, null)
+            .show()
     }
 
     private fun deleteImage(view: View) {
