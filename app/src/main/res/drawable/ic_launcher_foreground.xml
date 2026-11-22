@@ -13,13 +13,11 @@
     <path
         android:strokeColor="#0284C7"
         android:strokeWidth="1.8"
-        android:fillColor="@android:color/transparent"
         android:pathData="M26,32 L54,20 L82,32 L82,76 L54,88 L26,76 Z" />
 
     <path
         android:strokeColor="#0EA5E9"
         android:strokeWidth="1.2"
-        android:fillColor="@android:color/transparent"
         android:pathData="M26,32 L54,44 L82,32 M54,44 L54,88 M22,54 L86,54" />
 
     <path
@@ -33,16 +31,14 @@
     <path
         android:strokeColor="#00E5FF"
         android:strokeWidth="4.2"
-        android:strokeCap="round"
-        android:strokeJoin="round"
-        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
         android:pathData="M33,45 L48,45 L41,53.5 L48,53.5 L48,63 L33,63" />
 
     <path
         android:strokeColor="#FFFFFF"
         android:strokeWidth="4.2"
-        android:strokeCap="round"
-        android:strokeJoin="round"
-        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
         android:pathData="M73,45 L57,45 L57,63 L73,63 M57,54 L69,54" />
 </vector>
