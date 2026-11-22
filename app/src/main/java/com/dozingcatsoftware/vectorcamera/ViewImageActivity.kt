@@ -7,13 +7,15 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
-
-import androidx.core.content.FileProvider
 import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import com.dozingcatsoftware.util.getLandscapeDisplaySize
+import com.dozingcatsoftware.util.grantUriPermissionForIntent
+import com.dozingcatsoftware.vectorcamera.databinding.ViewImageBinding
 import com.dozingcatsoftware.vectorcamera.effect.AsciiEffect
 import com.dozingcatsoftware.vectorcamera.effect.CustomEffect
 import com.dozingcatsoftware.vectorcamera.effect.Effect
@@ -24,9 +26,6 @@ import com.dozingcatsoftware.vectorcamera.effect.customColorMapEffect
 import com.dozingcatsoftware.vectorcamera.effect.customContourEffect
 import com.dozingcatsoftware.vectorcamera.effect.customPaletteEffect
 import com.dozingcatsoftware.vectorcamera.effect.customPermuteEffect
-import com.dozingcatsoftware.util.getLandscapeDisplaySize
-import com.dozingcatsoftware.util.grantUriPermissionForIntent
-import com.dozingcatsoftware.vectorcamera.databinding.ViewImageBinding
 import java.io.File
 
 
@@ -38,6 +37,8 @@ class ViewImageActivity : AppCompatActivity() {
     private lateinit var imageId: String
     private var inEffectSelectionMode = false
     private var thumbnailRenderer: StaticThumbnailRenderer? = null
+    // The image's pixels, held while a custom effect editor is open so that each change
+    // doesn't reread them from disk.
     private var cameraImageForEditing: CameraImage? = null
     private val effectRegistry = EffectRegistry()
     private val preferences = VCPreferences(this)
@@ -72,6 +73,7 @@ class ViewImageActivity : AppCompatActivity() {
             thumbnailRenderer?.requestThumbnail(info.id)
         }
 
+        // Back closes the effect picker or an open editor panel rather than leaving the activity.
         onBackPressedCallback = object: OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
                 if (inEffectSelectionMode) {
@@ -101,6 +103,7 @@ class ViewImageActivity : AppCompatActivity() {
         updateEditButton()
     }
 
+    // The image's effect as an editable custom effect, or null if it isn't one.
     private fun customEffectForImage(metadata: MediaMetadata): Effect? =
             effectRegistry.customEffectForMetadata(
                     metadata.effectId, metadata.effectMetadata, preferences.lookupFunction)
@@ -117,12 +120,15 @@ class ViewImageActivity : AppCompatActivity() {
                 inEffectSelectionMode || visibleCustomEffectEditor() != null
     }
 
+    // The edit button shows when the image uses a custom effect and its editor is closed.
     private fun updateEditButton() {
         val editable = customEffectForImage(photoLibrary.metadataForItemId(imageId)) != null
         binding.editEffectButton.visibility =
                 if (editable && visibleCustomEffectEditor() == null) View.VISIBLE else View.GONE
     }
 
+    // Opens the editor panel for `effect` if it's a custom effect; otherwise closes any panel.
+    // Edits change this image's saved effect parameters, not the custom effect's preferences.
     private fun showCustomEffectEditor(effect: Effect) {
         hideCustomEffectEditor()
         val editor: View? = when (val scheme = (effect as? CustomEffect<*>)?.scheme) {
@@ -140,6 +146,7 @@ class ViewImageActivity : AppCompatActivity() {
         updateEditButton()
     }
 
+    // Opens the editor for the image's custom effect, from the edit button.
     private fun showCustomEffectEditor(view: View?) {
         val effect = customEffectForImage(photoLibrary.metadataForItemId(imageId)) ?: return
         showCustomEffectEditor(effect)
@@ -174,6 +181,8 @@ class ViewImageActivity : AppCompatActivity() {
         applyEditedEffect {id -> customContourEffect(cs, id)}
     }
 
+    // Re-renders the image with the edited effect and saves it to the image's metadata and
+    // thumbnail, keeping the picker ID so the picker still highlights the custom effect.
     private fun applyEditedEffect(effectForId: (String) -> Effect) {
         val metadata = photoLibrary.metadataForItemId(imageId)
         val effectId = metadata.effectId ?: return
@@ -195,6 +204,7 @@ class ViewImageActivity : AppCompatActivity() {
                 {picker.thumbnailSize},
                 {id, bitmap ->
                     handler.post {
+                        // Ignore thumbnails that arrive after the picker was closed.
                         if (renderer === thumbnailRenderer) {
                             picker.setThumbnail(id, bitmap)
                         }
@@ -254,6 +264,7 @@ class ViewImageActivity : AppCompatActivity() {
 
     private fun handleEffectSelected(info: EffectInfo) {
         val effect = effectRegistry.createEffect(info.id, preferences.lookupFunction)
+        // Update metadata and thumbnail, *not* the full size image because that's slow.
         val newMetadata = photoLibrary.metadataForItemId(imageId)
                 .withEffectMetadata(effect.effectMetadata(), info.id)
         val pb = createProcessedBitmap(effect, newMetadata)
@@ -262,6 +273,7 @@ class ViewImageActivity : AppCompatActivity() {
         binding.overlayView.updateBitmap(pb)
         updateInEffectSelectionModeFlag(false)
         hideEffectPicker()
+        // A newly chosen custom effect opens its editor, as in the camera activity.
         showCustomEffectEditor(effect)
     }
 
@@ -361,10 +373,38 @@ class ViewImageActivity : AppCompatActivity() {
         shareIfExists()
     }
 
-    private fun shareVector(metadata: MediaMetadata, effect: Effect, isDxf: Boolean) {
+    private fun openVectorStudio(metadata: MediaMetadata, effect: Effect) {
         val waitDialog = ProgressDialog(this).apply {
             isIndeterminate = true
-            setMessage(if (isDxf) "Generating DXF CAD file..." else "Generating SVG vector file...")
+            setMessage("Preparing CAD Studio...")
+            setCancelable(false)
+            show()
+        }
+
+        Thread {
+            try {
+                val pb = createProcessedBitmap(effect, metadata)
+                val fullBitmap = pb.renderBitmap(pb.sourceImage.width(), pb.sourceImage.height())
+                handler.post {
+                    waitDialog.dismiss()
+                    VectorPreviewDialog(this, fullBitmap) { finalScene, isDxf ->
+                        exportAndShareScene(finalScene, isDxf)
+                    }.show()
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "Error preparing CAD studio", ex)
+                handler.post {
+                    waitDialog.dismiss()
+                    Toast.makeText(this, "Error: ${ex.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun exportAndShareScene(scene: VectorScene, isDxf: Boolean) {
+        val waitDialog = ProgressDialog(this).apply {
+            isIndeterminate = true
+            setMessage(if (isDxf) "Exporting DXF CAD file..." else "Exporting SVG file...")
             setCancelable(false)
             show()
         }
@@ -374,12 +414,11 @@ class ViewImageActivity : AppCompatActivity() {
                 val ext = if (isDxf) "dxf" else "svg"
                 val mimeType = if (isDxf) "application/dxf" else "image/svg+xml"
                 val outFile = photoLibrary.tempFileWithName("${imageId}_3E.$ext")
-                val pb = createProcessedBitmap(effect, metadata)
                 photoLibrary.createTempFileOutputStream(outFile).use { os ->
                     if (isDxf) {
-                        VectorExporter.writeDxf(pb, os)
+                        VectorExporter.writeDxf(scene, os)
                     } else {
-                        VectorExporter.writeSvg(pb, os)
+                        VectorExporter.writeSvg(scene, os)
                     }
                 }
                 handler.post {
@@ -390,7 +429,7 @@ class ViewImageActivity : AppCompatActivity() {
                 Log.e(TAG, "Error exporting vector", ex)
                 handler.post {
                     waitDialog.dismiss()
-                    Toast.makeText(this, "Error exporting vector: ${ex.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "Error exporting: ${ex.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
@@ -415,11 +454,10 @@ class ViewImageActivity : AppCompatActivity() {
     }
 
     private fun showFormatShareDialog(metadata: MediaMetadata, effect: Effect) {
-        val shareTypes = mutableListOf("image", "dxf", "svg")
+        val shareTypes = mutableListOf("image", "cad_studio")
         val shareTypeLabels = mutableListOf(
             getString(R.string.sharePictureImageOptionLabel),
-            getString(R.string.sharePictureDxfOptionLabel),
-            getString(R.string.sharePictureSvgOptionLabel)
+            getString(R.string.sharePictureDxfOptionLabel)
         )
         if (effect is AsciiEffect) {
             shareTypes.add("html")
@@ -437,8 +475,7 @@ class ViewImageActivity : AppCompatActivity() {
             .setPositiveButton(R.string.shareDialogYesLabel) { _: DialogInterface, _: Int ->
                 when (selectedShareType) {
                     "image" -> shareImage(metadata, effect)
-                    "dxf" -> shareVector(metadata, effect, isDxf = true)
-                    "svg" -> shareVector(metadata, effect, isDxf = false)
+                    "cad_studio" -> openVectorStudio(metadata, effect)
                     "html" -> if (effect is AsciiEffect) shareHtml(metadata, effect)
                     "text" -> if (effect is AsciiEffect) shareText(metadata, effect)
                 }

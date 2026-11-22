@@ -40,10 +40,9 @@
     <string name="shareDialogNoLabel">Cancel</string>
     <string name="shareActionTitle">Share using</string>
 
-    <string name="sharePictureDialogTitle">Share picture as</string>
+	<string name="sharePictureDialogTitle">Share picture as</string>
     <string name="sharePictureImageOptionLabel">Image (PNG)</string>
-    <string name="sharePictureDxfOptionLabel">CAD Drawing (DXF)</string>
-    <string name="sharePictureSvgOptionLabel">Vector Graphic (SVG)</string>
+    <string name="sharePictureDxfOptionLabel">CAD Vector Studio (DXF / SVG)</string>
     <string name="sharePictureHtmlOptionLabel">HTML</string>
     <string name="sharePictureTextOptionLabel">Text</string>
 
